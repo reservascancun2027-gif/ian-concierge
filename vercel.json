@@ -1,0 +1,13 @@
+{
+  "rewrites": [
+    { "source": "/tribuhostel/:code", "destination": "/tribuhostel/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/tribuhostel/(.*)",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+      ]
+    }
+  ]
+}
