@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="es"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Tribu Hostel · Comienza tu experiencia con IAN Concierge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Inter+Tight:wght@400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: oklch(0.14 0.03 155);
+  --canopy: oklch(0.20 0.05 155);
+  --leaf: oklch(0.55 0.12 145);
+  --gold: oklch(0.82 0.14 88);
+  --gold-deep: oklch(0.68 0.16 70);
+  --cream: oklch(0.96 0.02 90);
+  --bone: oklch(0.88 0.03 90);
+  --whatsapp: #25D366;
+  --whatsapp-deep: #1ebe5b;
+  --serif: "Fraunces", Georgia, serif;
+  --sans: "Inter Tight", -apple-system, BlinkMacSystemFont, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--ink);
+  color: var(--cream);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100svh;
+  overflow-x: hidden;
+}
+
+/* Lush gradient + grain background */
+.bg-caribe {
+  position: fixed; inset: 0; z-index: -2;
+  background:
+    radial-gradient(ellipse 90% 50% at 80% 0%, oklch(0.32 0.08 145 / 0.55), transparent 60%),
+    radial-gradient(ellipse 80% 70% at 0% 100%, oklch(0.25 0.07 165 / 0.6), transparent 60%),
+    radial-gradient(circle at 60% 50%, oklch(0.22 0.06 150 / 0.4), transparent 70%),
+    linear-gradient(180deg, var(--ink), oklch(0.10 0.025 160));
+}
+.bg-grain {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  opacity: 0.07; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.8 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* Floating leaf */
+.leaf {
+  position: fixed; z-index: -1; pointer-events: none;
+  width: 220px; opacity: 0.16; filter: blur(0.3px);
+}
+.leaf.l1 { top: -40px; right: -70px; transform: rotate(28deg); }
+.leaf.l2 { bottom: -60px; left: -80px; transform: rotate(-150deg); opacity: 0.12; width: 260px; }
+
+.wrap {
+  position: relative;
+  width: min(560px, 100% - 40px);
+  margin-inline: auto;
+  min-height: 100svh;
+  display: flex; flex-direction: column;
+  padding: 28px 0 max(28px, env(safe-area-inset-bottom));
+}
+
+/* Brand */
+.brand {
+  display: flex; align-items: center; gap: 12px;
+  font-family: var(--serif); font-weight: 500;
+  font-size: 20px; letter-spacing: -0.01em;
+}
+.brand .mark {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, var(--gold), var(--gold-deep) 60%, oklch(0.45 0.14 60));
+  box-shadow: 0 0 0 1px oklch(0.82 0.14 88 / 0.3), 0 8px 24px -8px oklch(0.82 0.14 88 / 0.5);
+  position: relative; flex: none;
+}
+.brand .mark::after {
+  content: ""; position: absolute; inset: 4px; border-radius: 50%;
+  background: radial-gradient(circle at 70% 70%, transparent 40%, oklch(0.15 0.04 150 / 0.45));
+}
+.brand b { color: var(--cream); }
+.brand small {
+  color: var(--gold); font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.16em; text-transform: uppercase;
+}
+
+/* Hero content centered */
+.hero {
+  flex: 1;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 44px 0 36px;
+}
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 9px;
+  align-self: flex-start;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--gold);
+  padding: 8px 14px; border-radius: 999px;
+  background: oklch(0.82 0.14 88 / 0.08);
+  border: 1px solid oklch(0.82 0.14 88 / 0.22);
+  margin-bottom: 26px;
+}
+.eyebrow .dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--whatsapp);
+  box-shadow: 0 0 0 0 var(--whatsapp); animation: pulse 2.2s infinite;
+}
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 oklch(0.72 0.18 150 / 0.6); }
+  70% { box-shadow: 0 0 0 9px oklch(0.72 0.18 150 / 0); }
+  100% { box-shadow: 0 0 0 0 oklch(0.72 0.18 150 / 0); }
+}
+.welcome {
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--bone); opacity: 0.75;
+  margin: 0 0 14px;
+}
+h1 {
+  font-family: var(--serif); font-weight: 400;
+  font-size: clamp(40px, 12vw, 58px); line-height: 1.02;
+  letter-spacing: -0.02em; margin: 0;
+  text-wrap: balance;
+}
+h1 .italic { font-style: italic; color: var(--gold); }
+.lede {
+  font-size: 17px; line-height: 1.55; color: var(--bone);
+  margin: 22px 0 0; max-width: 42ch;
+  text-wrap: pretty;
+}
+
+/* Steps */
+.steps {
+  list-style: none; padding: 0; margin: 30px 0 0;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.steps li {
+  display: flex; align-items: center; gap: 14px;
+  font-size: 15px; color: var(--cream);
+}
+.steps .n {
+  width: 30px; height: 30px; flex: none; border-radius: 50%;
+  display: grid; place-items: center;
+  font-family: var(--mono); font-size: 13px; font-weight: 500;
+  color: var(--gold); background: oklch(0.82 0.14 88 / 0.1);
+  border: 1px solid oklch(0.82 0.14 88 / 0.3);
+}
+
+/* WhatsApp CTA */
+.cta-zone { margin-top: 38px; }
+.wa-btn {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  width: 100%;
+  background: var(--whatsapp);
+  color: #06231a;
+  text-decoration: none;
+  font-family: var(--sans); font-weight: 700; font-size: 19px;
+  letter-spacing: -0.01em;
+  padding: 20px 24px; border-radius: 20px;
+  box-shadow: 0 14px 34px -10px oklch(0.72 0.2 150 / 0.7), inset 0 -2px 0 oklch(0.5 0.16 150 / 0.5);
+  transition: transform .14s ease, box-shadow .2s ease, background .2s ease;
+}
+.wa-btn:active { transform: scale(0.98); }
+.wa-btn:hover { background: var(--whatsapp-deep); box-shadow: 0 20px 44px -12px oklch(0.72 0.2 150 / 0.8); }
+.wa-btn svg { width: 28px; height: 28px; flex: none; }
+.wa-hint {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
+  color: var(--bone); opacity: 0.7; margin: 16px 0 0; text-transform: uppercase;
+}
+.room-tag { color: var(--gold); opacity: 1; }
+
+/* Estado sin código válido (acceso directo sin QR) */
+.gate { display: none; margin-top: 38px; }
+.gate .gate-card {
+  border: 1px solid oklch(0.82 0.14 88 / 0.22);
+  background: oklch(0.82 0.14 88 / 0.06);
+  border-radius: 20px; padding: 26px 24px; text-align: center;
+}
+.gate .qr-ico {
+  width: 44px; height: 44px; margin: 0 auto 16px;
+  display: grid; place-items: center; border-radius: 12px;
+  color: var(--gold); background: oklch(0.82 0.14 88 / 0.1);
+  border: 1px solid oklch(0.82 0.14 88 / 0.3);
+}
+.gate h2 {
+  font-family: var(--serif); font-weight: 400; font-size: 22px;
+  margin: 0 0 8px; color: var(--cream);
+}
+.gate p {
+  font-size: 14px; line-height: 1.5; color: var(--bone);
+  margin: 0; opacity: 0.85;
+}
+
+footer {
+  text-align: center; font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.08em; color: var(--bone); opacity: 0.5;
+  padding-top: 18px;
+}
+footer .gold { color: var(--gold); opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="bg-caribe"></div>
+<div class="bg-grain"></div>
+
+<svg class="leaf l1" viewBox="0 0 200 300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="lg1" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="oklch(0.5 0.14 145)"></stop>
+      <stop offset="1" stop-color="oklch(0.25 0.08 155)"></stop>
+    </linearGradient>
+  </defs>
+  <path d="M100 10 C40 60 20 140 50 230 C70 290 130 290 150 230 C180 140 160 60 100 10 Z" fill="url(#lg1)"></path>
+  <path d="M100 20 L100 280" stroke="oklch(0.7 0.12 100)" stroke-width="1.5" opacity="0.6"></path>
+  <path d="M100 60 Q60 90 50 130 M100 80 Q60 110 55 160 M100 110 Q70 140 60 190 M100 60 Q140 90 150 130 M100 80 Q140 110 145 160 M100 110 Q130 140 140 190" stroke="oklch(0.7 0.12 100)" stroke-width="1" fill="none" opacity="0.45"></path>
+</svg>
+<svg class="leaf l2" viewBox="0 0 200 300" xmlns="http://www.w3.org/2000/svg">
+  <path d="M100 10 C40 60 20 140 50 230 C70 290 130 290 150 230 C180 140 160 60 100 10 Z" fill="url(#lg1)"></path>
+</svg>
+
+<div class="wrap">
+  <div class="brand">
+    <div class="mark"></div>
+    <span>Tribu <b>Hostel</b></span>
+    <small>× IAN Concierge</small>
+  </div>
+
+  <main class="hero">
+    <div class="eyebrow">
+      <span class="dot"></span>
+      Concierge IA · En vivo por WhatsApp
+    </div>
+
+    <p class="welcome">Bienvenido a</p>
+    <h1>Tribu Hostel.<br><span class="italic">Comienza tu experiencia</span> con IAN&nbsp;Concierge.</h1>
+    <p class="lede">
+      Tu concierge personal vive en WhatsApp. Pídele recomendaciones, reserva
+      experiencias, organiza tus restaurantes y resuelve cualquier duda — en segundos,
+      a cualquier hora.
+    </p>
+
+    <ul class="steps">
+      <li><span class="n">1</span> Toca el botón y abre WhatsApp</li>
+      <li><span class="n">2</span> Saluda a IAN y cuéntale qué buscas</li>
+      <li><span class="n">3</span> Disfruta — él se encarga del resto</li>
+    </ul>
+
+    <!-- CTA: se muestra solo si el código de habitación de la URL es válido -->
+    <div class="cta-zone" id="ctaZone" style="display:none">
+      <a class="wa-btn" id="waBtn" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 32 32" fill="#06231a" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16 .4C7.4.4.4 7.4.4 16c0 2.8.7 5.5 2.1 7.9L.3 31.7l8-2.1c2.3 1.2 4.9 1.9 7.6 1.9 8.6 0 15.6-7 15.6-15.6S24.6.4 16 .4zm0 28.5c-2.4 0-4.8-.7-6.9-1.9l-.5-.3-4.8 1.3 1.3-4.7-.3-.5a12.8 12.8 0 01-2-6.8C2.9 8.8 8.8 2.9 16 2.9S29.1 8.8 29.1 16 23.2 28.9 16 28.9zm7.2-9.6c-.4-.2-2.3-1.1-2.7-1.3-.4-.1-.6-.2-.9.2-.3.4-1 1.3-1.2 1.5-.2.2-.4.3-.8.1-.4-.2-1.7-.6-3.2-2-1.2-1-2-2.4-2.2-2.8-.2-.4 0-.6.2-.8.2-.2.4-.4.6-.7.2-.2.3-.4.4-.7.1-.3 0-.5 0-.7-.1-.2-.9-2.2-1.3-3-.3-.8-.6-.7-.9-.7h-.7c-.2 0-.7.1-1 .5-.3.4-1.3 1.3-1.3 3.1 0 1.8 1.3 3.6 1.5 3.8.2.3 2.6 4 6.3 5.6.9.4 1.6.6 2.1.8.9.3 1.7.2 2.3.1.7-.1 2.3-.9 2.6-1.8.3-.9.3-1.6.2-1.8-.1-.2-.3-.3-.7-.5z"></path>
+        </svg>
+        Hablar con IAN ahora
+      </a>
+      <p class="wa-hint">↑ Abre directo en WhatsApp · Habitación <span class="room-tag" id="roomTag"></span></p>
+    </div>
+
+    <!-- Estado neutral: alguien entró sin escanear el QR / código inválido -->
+    <div class="gate" id="gate">
+      <div class="gate-card">
+        <div class="qr-ico">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+            <line x1="14" y1="14" x2="14" y2="14.01"></line>
+            <line x1="21" y1="14" x2="21" y2="14.01"></line>
+            <line x1="14" y1="21" x2="21" y2="21"></line>
+            <line x1="17" y1="17" x2="17" y2="17.01"></line>
+            <line x1="21" y1="17" x2="21" y2="17.01"></line>
+          </svg>
+        </div>
+        <h2>Escanea el QR de tu habitación</h2>
+        <p>Para hablar con IAN, escanea el código QR que está en tu habitación de Tribu Hostel. Él se activará al instante.</p>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    Tribu Hostel · Riviera Maya — powered by <span class="gold">IAN Concierge</span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  // ── Configuración ───────────────────────────────────────────
+  var PHONE = "5219847451281";              // número de WhatsApp de IAN
+  var ROOM_RE = /^[A-Z]{2,4}[0-9]{1,3}$/;   // formato de código de habitación (ej: VIC19, MUR36)
+  // Si quieres lista exacta de las 53 habitaciones, reemplaza la línea de validación
+  // por:  var ROOMS = ["VIC19","MUR36", ...];  y valida con ROOMS.indexOf(code) !== -1
+
+  // ── Leer el código desde la URL ─────────────────────────────
+  function getRoomCode() {
+    var q = new URLSearchParams(location.search);
+    var code = q.get("r") || q.get("room") || q.get("text");
+    if (!code) {
+      var parts = location.pathname.split("/").filter(Boolean);
+      if (parts.length) code = parts[parts.length - 1]; // último segmento del path
+    }
+    if (!code) return null;
+    code = decodeURIComponent(code).trim().toUpperCase();
+    return ROOM_RE.test(code) ? code : null;
+  }
+
+  var code = getRoomCode();
+  var cta = document.getElementById("ctaZone");
+  var gate = document.getElementById("gate");
+
+  if (code) {
+    var btn = document.getElementById("waBtn");
+    btn.href = "https://wa.me/" + PHONE + "?text=" + encodeURIComponent(code);
+    document.getElementById("roomTag").textContent = code;
+    cta.style.display = "";
+    gate.style.display = "none";
+  } else {
+    cta.style.display = "none";
+    gate.style.display = "block";
+  }
+})();
+</script>
+
+</body></html>
