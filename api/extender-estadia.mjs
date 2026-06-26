@@ -76,14 +76,14 @@ export default async function handler(req, res) {
       const noches = enumerarNoches(checkinDate, newCheckout); // una entrada por noche (NO incluye el dia de checkout)
       const detalle = [];
 
-      noches.forEach((fecha, j) => {
+      noches.forEach((fecha) => {
         const esNueva = fecha >= oldCheckout; // las noches desde el checkout viejo en adelante son las nuevas
         const rate = esNueva
           ? tarifaNoche
           : (existentes[fecha] != null ? existentes[fecha] : tarifaNoche); // fallback defensivo (lo marcamos abajo)
         if (esNueva) nochesNuevas++;
-        params.append(`rooms[${i}][detailedRates][${j}][date]`, fecha);
-        params.append(`rooms[${i}][detailedRates][${j}][rate]`, rate);
+        // formato OBJETO indexado por fecha, simetrico con lo que devuelve la lectura (detailedRoomRates)
+        params.append(`rooms[${i}][detailedRates][${fecha}]`, rate);
         detalle.push({
           fecha, rate, nueva: esNueva,
           origen: esNueva ? "tarifa_noche" : (existentes[fecha] != null ? "preservada" : "FALLBACK")
