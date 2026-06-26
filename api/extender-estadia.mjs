@@ -136,6 +136,7 @@ export default async function handler(req, res) {
         // La extension ya quedo, pero el folio tiene el cobro de adjustPrice sin corregir. Avisar claro.
         return res.status(200).json({
           success: false, step: "postAdjustment",
+          _build: "type-room-v1",
           error: `Extension hecha, pero no pude corregir el folio: ${adjJson.message || "postAdjustment fallo"}`,
           balance_antes: balanceAntes, balance_despues: balanceDespues,
           cargo_correcto: cargoCorrecto, amount_intentado: amountAjuste
@@ -146,6 +147,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
+      _build: "type-room-v1",
       nueva_fecha_checkout: nuevaFecha,
       total_adicional: cargoCorrecto,
       moneda: "MXN",
