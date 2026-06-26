@@ -128,6 +128,7 @@ export default async function handler(req, res) {
       adjParams.append("propertyID", PROPERTY_ID);
       adjParams.append("reservationID", grupoID);
       adjParams.append("amount", String(amountAjuste));
+      adjParams.append("type", "room"); // a que se aplica el ajuste: room rate (no item/tax/fee)
       adjParams.append("description", `Ajuste extension: ${nochesNuevas} noche(s) a ${tarifaNoche} MXN`);
 
       const adjJson = await cbPost("postAdjustment", API_KEY, adjParams.toString());
