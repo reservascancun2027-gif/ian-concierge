@@ -194,23 +194,25 @@ function enumerarNoches(checkin, checkout) {
 }
 
 // Indexa tarifas existentes: { subReservationID: { 'YYYY-MM-DD': rate } }
-// Parser DEFENSIVO: getReservationsWithRateDetails puede variar el shape; busca arreglos tipo detailedRates.
+// getReservationsWithRateDetails devuelve las tarifas por noche en room.detailedRoomRates
+// como OBJETO { 'YYYY-MM-DD': rate } (no como arreglo). Confirmado contra la reserva real.
 function indexarTarifasExistentes(rateJson) {
   const idx = {};
   if (!rateJson || rateJson.success === false) return idx;
   const data = rateJson.data;
   const reservas = Array.isArray(data) ? data : (data ? [data] : []);
   reservas.forEach(r => {
-    const rooms = r.rooms || r.assigned || r.subReservations || [];
-    (Array.isArray(rooms) ? rooms : []).forEach(room => {
-      const sub = String(room.subReservationID || room.subReservationId || "");
-      const detalles = room.detailedRates || room.roomRateDetailed || room.rates || [];
-      if (!sub || !Array.isArray(detalles)) return;
+    const rooms = Array.isArray(r.rooms) ? r.rooms : [];
+    rooms.forEach(room => {
+      const sub = String(room.subReservationID || "");
+      // objeto { 'YYYY-MM-DD': rate }; fallback a otros nombres por si acaso
+      const rates = room.detailedRoomRates || room.detailedRates;
+      if (!sub || !rates || typeof rates !== "object" || Array.isArray(rates)) return;
       idx[sub] = idx[sub] || {};
-      detalles.forEach(dr => {
-        const fecha = dr.date || dr.rateDate || dr.day;
-        const rate  = num(dr.rate != null ? dr.rate : (dr.roomRate != null ? dr.roomRate : dr.totalRate), NaN);
-        if (fecha && rate > 0) idx[sub][String(fecha).slice(0, 10)] = rate;
+      Object.entries(rates).forEach(([fecha, rate]) => {
+        const r2 = num(rate, NaN);
+        // se preservan TODAS las tarifas, incluido $0 (noche de cortesia), no solo > 0
+        if (fecha && !isNaN(r2)) idx[sub][String(fecha).slice(0, 10)] = r2;
       });
     });
   });
