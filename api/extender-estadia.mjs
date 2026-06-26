@@ -124,30 +124,48 @@ export default async function handler(req, res) {
 
     let ajusteFolio = null;
     if (Math.abs(amountAjuste) >= 0.01) {
-      const adjParams = new URLSearchParams();
-      adjParams.append("propertyID", PROPERTY_ID);
-      adjParams.append("reservationID", grupoID);
-      adjParams.append("amount", String(amountAjuste));
-      adjParams.append("type", "room"); // a que se aplica el ajuste: room rate (no item/tax/fee)
-      adjParams.append("description", `Ajuste extension: ${nochesNuevas} noche(s) a ${tarifaNoche} MXN`);
+      // PROBADOR de 'type': Cloudbeds rechazo "room". Probamos candidatos de room-revenue
+      // en orden; nos quedamos con el PRIMERO que acepte (solo ese aplica el ajuste).
+      const candidatosType = ["rate", "roomRate", "room_rate", "roomRevenue", "room_revenue", "accommodation"];
+      let typeUsado = null;
+      const intentos = [];
 
-      const adjJson = await cbPost("postAdjustment", API_KEY, adjParams.toString());
-      if (!adjJson.success) {
-        // La extension ya quedo, pero el folio tiene el cobro de adjustPrice sin corregir. Avisar claro.
+      for (const t of candidatosType) {
+        const adjParams = new URLSearchParams();
+        adjParams.append("propertyID", PROPERTY_ID);
+        adjParams.append("reservationID", grupoID);
+        adjParams.append("amount", String(amountAjuste));
+        adjParams.append("type", t);
+        adjParams.append("description", `Ajuste extension: ${nochesNuevas} noche(s) a ${tarifaNoche} MXN`);
+
+        const adjJson = await cbPost("postAdjustment", API_KEY, adjParams.toString());
+        intentos.push({ type: t, ok: !!adjJson.success, msg: adjJson.success ? "ok" : (adjJson.message || "fallo") });
+        if (adjJson.success) { typeUsado = t; break; }
+      }
+
+      if (!typeUsado) {
+        // Ningun candidato funciono. Devolvemos todos los intentos para ver el set valido.
         return res.status(200).json({
-          success: false, step: "postAdjustment",
-          _build: "type-room-v1",
-          error: `Extension hecha, pero no pude corregir el folio: ${adjJson.message || "postAdjustment fallo"}`,
+          success: false, step: "postAdjustment", _build: "type-prober-v1",
+          error: "Ningun valor de 'type' fue aceptado. Revisa 'intentos' para deducir el set valido.",
+          intentos,
           balance_antes: balanceAntes, balance_despues: balanceDespues,
           cargo_correcto: cargoCorrecto, amount_intentado: amountAjuste
         });
       }
-      ajusteFolio = { aplicado: true, amount: amountAjuste, motivo: amountAjuste > 0 ? "descuento (Cloudbeds cobro de mas por re-tarifado)" : "cargo extra (Cloudbeds cobro de menos)" };
+
+      ajusteFolio = {
+        aplicado: true,
+        type_usado: typeUsado, // <- ESTE es el valor correcto; lo dejamos fijo una vez confirmado
+        amount: amountAjuste,
+        motivo: amountAjuste > 0 ? "descuento (Cloudbeds cobro de mas por re-tarifado)" : "cargo extra (Cloudbeds cobro de menos)",
+        intentos
+      };
     }
 
     return res.status(200).json({
       success: true,
-      _build: "type-room-v1",
+      _build: "type-prober-v1",
       nueva_fecha_checkout: nuevaFecha,
       total_adicional: cargoCorrecto,
       moneda: "MXN",
