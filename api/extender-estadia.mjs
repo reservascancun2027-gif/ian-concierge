@@ -12,6 +12,18 @@ const esFecha = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || "");
 const aUTC = (s) => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
 const nochesEntre = (a, b) => Math.round((aUTC(b) - aUTC(a)) / 86400000);
 
+// Serializa objetos/arreglos anidados en notación de corchetes (rooms[0][endDate]=...),
+// que es lo que exige la API v1.2 form-urlencoded. NO mandar JSON como texto.
+function aFormData(obj, prefijo = "", out = new URLSearchParams()) {
+  for (const [k, v] of Object.entries(obj)) {
+    const clave = prefijo ? `${prefijo}[${k}]` : k;
+    if (v === null || v === undefined) continue;
+    if (typeof v === "object") aFormData(v, clave, out);
+    else out.append(clave, String(v));
+  }
+  return out;
+}
+
 async function cb(metodo, endpoint, params) {
   const opts = { method: metodo, headers: { Authorization: `Bearer ${API_KEY}` } };
   let url = `${CB}/${endpoint}`;
@@ -19,7 +31,7 @@ async function cb(metodo, endpoint, params) {
     url += "?" + new URLSearchParams({ propertyID: PROPERTY_ID, ...params });
   } else {
     opts.headers["Content-Type"] = "application/x-www-form-urlencoded";
-    opts.body = new URLSearchParams({ propertyID: PROPERTY_ID, ...params });
+    opts.body = aFormData({ propertyID: PROPERTY_ID, ...params });
   }
   const r = await fetch(url, opts);
   const j = await r.json().catch(() => ({}));
@@ -114,7 +126,7 @@ export default async function handler(req, res) {
     // ---------- 4. PUT solo con fechas + adjustPrice ----------
     const put = await cb("PUT", "putReservation", {
       reservationID,
-      rooms: JSON.stringify(rooms),
+      rooms, // se serializa como rooms[0][campo]=valor (notación de corchetes)
       adjustPrice: "true",
     });
     if (!put.success) {
