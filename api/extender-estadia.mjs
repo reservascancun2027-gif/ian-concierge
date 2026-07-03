@@ -129,9 +129,27 @@ export default async function handler(req, res) {
     }
 
     // ---------- 4. PUT solo con fechas + adjustPrice ----------
+    // Arreglos hermanos adults/children, mismo índice que rooms (patrón v1.2).
+    // Se toma la ocupación real de cada cama; si no viene, 1 adulto / 0 niños.
+    const adults = todas.map((c) => ({
+      roomTypeID: c.roomTypeID,
+      quantity: parseInt(c.adults ?? d.adults ?? 1, 10) || 1,
+    }));
+    const children = todas.map((c) => ({
+      roomTypeID: c.roomTypeID,
+      quantity: parseInt(c.children ?? d.children ?? 0, 10) || 0,
+    }));
+    // También por cuarto, por si esta propiedad valida ahí:
+    rooms.forEach((r, i) => {
+      r.adults = adults[i].quantity;
+      r.children = children[i].quantity;
+    });
+
     const put = await cb("PUT", "putReservation", {
       reservationID,
       rooms, // se serializa como rooms[0][campo]=valor (notación de corchetes)
+      adults,
+      children,
       adjustPrice: "true",
     });
     if (!put.success) {
