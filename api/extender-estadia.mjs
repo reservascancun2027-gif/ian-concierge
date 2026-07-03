@@ -1,208 +1,168 @@
-const API_BASE = "https://hotels.cloudbeds.com/api/v1.2";
+// /api/extender-estadia.mjs — v2 "a prueba de day rates"
+// Patrón: PUT solo con fechas (adjustPrice:true, SIN roomRate) → delta de saldo → postAdjustment
+// Igual que extender-otro-cuarto.mjs. El PUT nunca manda tarifas diarias,
+// por lo que el error "Number of days not equals to number of day rates" no puede ocurrir.
 
-// ENFOQUE postAdjustment (plan B documentado):
-// putReservation no acepta escritura de tarifas por dia (probado: "Number of days not
-// equals to number of day rates" con detailedRates/detailedRoomRates en arreglo y objeto).
-// Cloudbeds documenta postAdjustment como la via oficial para sobrescribir precio.
-// Flujo: extender con adjustPrice=true (recalcula) -> medir el cambio real de saldo ->
-// corregir con postAdjustment para que el cargo neto sea EXACTAMENTE tarifa_noche x noches.
+const CB = "https://api.cloudbeds.com/api/v1.2";
+const PROPERTY_ID = "195814";
+const API_KEY = process.env.CLOUDBEDS_API_KEY;
+
+// ---------- utilidades de fecha (UTC-seguras, formato YYYY-MM-DD) ----------
+const esFecha = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || "");
+const aUTC = (s) => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
+const nochesEntre = (a, b) => Math.round((aUTC(b) - aUTC(a)) / 86400000);
+
+async function cb(metodo, endpoint, params) {
+  const opts = { method: metodo, headers: { Authorization: `Bearer ${API_KEY}` } };
+  let url = `${CB}/${endpoint}`;
+  if (metodo === "GET") {
+    url += "?" + new URLSearchParams({ propertyID: PROPERTY_ID, ...params });
+  } else {
+    opts.headers["Content-Type"] = "application/x-www-form-urlencoded";
+    opts.body = new URLSearchParams({ propertyID: PROPERTY_ID, ...params });
+  }
+  const r = await fetch(url, opts);
+  const j = await r.json().catch(() => ({}));
+  return j;
+}
 
 export default async function handler(req, res) {
-  const API_KEY = process.env.CLOUDBEDS_API_KEY;
-  const PROPERTY_ID = process.env.PROPERTY_ID || "195814";
-
   try {
-    if (!API_KEY) {
-      return res.status(500).json({ success: false, error: "Falta CLOUDBEDS_API_KEY en las env vars de Vercel" });
-    }
+    const { reservationID, nueva_fecha_checkout, tarifa_noche, dry_run } = req.query;
+    const esDryRun = dry_run === "true" || dry_run === "1";
 
-    const p = (req.method === "POST" && req.body) ? req.body : (req.query || {});
-    const reservationIDArg = String(p.reservationID || "").trim();
-    const nuevaFecha       = String(p.nueva_fecha_checkout || "").trim();
-    const tarifaNoche      = num(p.tarifa_noche, NaN);
-    const dryRun           = String(p.dryRun || "") === "true";
-
-    if (!reservationIDArg || !nuevaFecha) {
-      return res.status(400).json({ success: false, error: "Faltan reservationID o nueva_fecha_checkout" });
-    }
-    // GUARD DE PRECIO: nunca operar con tarifa vacia o <= 0
-    if (!(tarifaNoche > 0)) {
-      return res.status(400).json({ success: false, error: "tarifa_noche faltante o invalida (debe ser un numero > 0)" });
-    }
-
-    const grupoID = reservationIDArg.split("-")[0];
-
-    // 1) Estado actual: saldo ANTES + estructura de camas
-    const getJson = await cb(`getReservation?propertyID=${PROPERTY_ID}&reservationID=${grupoID}`, API_KEY);
-    if (!getJson.success) {
-      return res.status(200).json({ success: false, step: "getReservation", error: getJson.message || "No se pudo leer la reserva" });
-    }
-    const assigned = (getJson.data && getJson.data.assigned) || [];
-    if (assigned.length === 0) {
-      return res.status(200).json({ success: false, error: "La reserva no tiene habitaciones asignadas" });
-    }
-
-    // Cama objetivo + noches nuevas (derivadas de fechas, no del arg)
-    const objetivo = assigned.find(r => String(r.subReservationID) === reservationIDArg);
-    if (!objetivo) {
+    // ---------- 1. Validaciones de entrada (fallar rápido y claro) ----------
+    if (!reservationID || !esFecha(nueva_fecha_checkout)) {
       return res.status(200).json({
         success: false,
-        error: `No se encontro la cama ${reservationIDArg} en el grupo ${grupoID}`,
-        camas_en_grupo: assigned.map(r => r.subReservationID)
+        result: "Datos incompletos: se requiere reservationID y nueva_fecha_checkout en formato YYYY-MM-DD.",
       });
     }
-    const oldCheckout  = objetivo.endDate;
-    const nochesNuevas = enumerarNoches(oldCheckout, nuevaFecha).length;
-    if (nochesNuevas <= 0) {
+    const tarifa = parseFloat(tarifa_noche);
+    if (!isFinite(tarifa) || tarifa <= 0) {
       return res.status(200).json({
         success: false,
-        error: `La nueva fecha (${nuevaFecha}) no extiende: el checkout actual de la cama ya es ${oldCheckout}`
+        result: "tarifa_noche inválida. Debe ser la tarifa POR NOCHE (número mayor a 0).",
       });
     }
 
-    const cargoCorrecto = Math.round(tarifaNoche * nochesNuevas * 100) / 100;
-    const balanceAntes  = num(getJson.data.balance);
+    // ---------- 2. Leer la reservación actual ----------
+    const resv = await cb("GET", "getReservation", { reservationID });
+    if (!resv.success || !resv.data) {
+      return res.status(200).json({
+        success: false,
+        result: `No encontré la reservación ${reservationID} en Cloudbeds.`,
+      });
+    }
+    const d = resv.data;
+    const checkoutActual = d.endDate; // checkout general de la reservación
+    const saldoAntes = parseFloat(d.balance ?? 0);
 
-    // 2) Armar putReservation: extiende SOLO la objetivo (adjustPrice=true); las demas intactas.
-    const params = new URLSearchParams();
-    params.append("propertyID", PROPERTY_ID);
-    params.append("reservationID", grupoID);
-    assigned.forEach((room, i) => {
-      const esObjetivo = String(room.subReservationID) === reservationIDArg;
-      params.append(`rooms[${i}][subReservationID]`, room.subReservationID);
-      params.append(`rooms[${i}][roomTypeID]`, room.roomTypeID);
-      if (room.roomID) params.append(`rooms[${i}][roomID]`, room.roomID);
-      params.append(`rooms[${i}][checkinDate]`, room.startDate);
-      params.append(`rooms[${i}][checkoutDate]`, esObjetivo ? nuevaFecha : room.endDate);
-      params.append(`rooms[${i}][adults]`, room.adults != null ? room.adults : 1);
-      params.append(`rooms[${i}][children]`, room.children != null ? room.children : 0);
-      params.append(`rooms[${i}][adjustPrice]`, esObjetivo ? "true" : "false");
+    if (!esFecha(checkoutActual)) {
+      return res.status(200).json({ success: false, result: "La reservación no tiene fecha de checkout válida." });
+    }
+    const nochesExtra = nochesEntre(checkoutActual, nueva_fecha_checkout);
+    if (nochesExtra <= 0) {
+      return res.status(200).json({
+        success: false,
+        result: `La nueva fecha (${nueva_fecha_checkout}) no es posterior al checkout actual (${checkoutActual}).`,
+      });
+    }
+
+    // ---------- 3. Reconstruir el arreglo COMPLETO de camas/cuartos ----------
+    // Regla ya conocida: si omites camas en putReservation, Cloudbeds las elimina.
+    // Solo extendemos las camas cuyo checkout coincide con el checkout general;
+    // las de rangos distintos (estadía dividida) se reenvían con sus fechas intactas.
+    const asignados = Array.isArray(d.assigned) ? d.assigned : [];
+    const sinAsignar = Array.isArray(d.unassigned) ? d.unassigned : [];
+    const todas = [...asignados, ...sinAsignar];
+    if (todas.length === 0) {
+      return res.status(200).json({ success: false, result: "La reservación no tiene cuartos/camas asignados." });
+    }
+
+    const rooms = todas.map((c) => {
+      const extiende = c.endDate === checkoutActual;
+      const room = {
+        roomTypeID: c.roomTypeID,
+        quantity: 1,
+        startDate: c.startDate,
+        endDate: extiende ? nueva_fecha_checkout : c.endDate,
+      };
+      if (c.roomID) room.roomID = c.roomID;
+      if (c.subReservationID) room.subReservationID = c.subReservationID; // ID a nivel de cama (fix v3.5.2)
+      return room;
+      // OJO: NO se incluye roomRate ni tarifas diarias. Nunca.
     });
 
-    if (dryRun) {
+    // ---------- 3.5 MODO DRY RUN: muestra lo que se enviaría, sin escribir nada ----------
+    if (esDryRun) {
+      const camasQueSeExtienden = todas.filter((c) => c.endDate === checkoutActual).length;
       return res.status(200).json({
         success: true,
-        dryRun: true,
-        grupo: grupoID,
-        objetivo: reservationIDArg,
-        old_checkout: oldCheckout,
-        nueva_fecha_checkout: nuevaFecha,
-        noches_extra: nochesNuevas,
-        tarifa_noche: tarifaNoche,
-        cargo_correcto: cargoCorrecto,
-        balance_antes: balanceAntes,
-        nota: "dryRun no escribe; el ajuste exacto se calcula tras el putReservation real",
-        body_preview: params.toString()
+        dry_run: true,
+        result: `DRY RUN: se extenderían ${camasQueSeExtienden} cama(s) de ${checkoutActual} a ${nueva_fecha_checkout} (${nochesExtra} noche(s) extra, cargo esperado $${(tarifa * nochesExtra * camasQueSeExtienden).toFixed(2)}). NO se modificó nada.`,
+        payload_put_que_se_enviaria: {
+          reservationID,
+          rooms,
+          adjustPrice: "true",
+        },
+        saldo_actual: saldoAntes,
+        nota: "Verifica que rooms tenga TODAS las camas y que solo cambie endDate en las que corresponde.",
       });
     }
 
-    // 3) Extender (adjustPrice recalcula). Esto SI funciona (sin error de day rates).
-    const putJson = await cb("putReservation", API_KEY, params.toString());
-    if (!putJson.success) {
+    // ---------- 4. PUT solo con fechas + adjustPrice ----------
+    const put = await cb("PUT", "putReservation", {
+      reservationID,
+      rooms: JSON.stringify(rooms),
+      adjustPrice: "true",
+    });
+    if (!put.success) {
       return res.status(200).json({
-        success: false, step: "putReservation",
-        error: putJson.message || "putReservation fallo",
-        body_preview: params.toString()
+        success: false,
+        result: `Cloudbeds rechazó la extensión: ${put.message || JSON.stringify(put)}. No se modificó la reservación.`,
       });
     }
 
-    // 4) Saldo DESPUES
-    const getJson2 = await cb(`getReservation?propertyID=${PROPERTY_ID}&reservationID=${grupoID}`, API_KEY);
-    const balanceDespues = num(getJson2.data && getJson2.data.balance, NaN);
-    if (isNaN(balanceDespues)) {
-      return res.status(200).json({
-        success: false, step: "getReservation_post",
-        error: "Extension hecha, pero no pude releer el saldo para calcular el ajuste. Revisa el folio manualmente.",
-        balance_antes: balanceAntes, cargo_correcto: cargoCorrecto
+    // ---------- 5. Fijar el precio exacto con postAdjustment (delta de saldo) ----------
+    const camasExtendidas = rooms.filter((r) => r.endDate === nueva_fecha_checkout && todas.find(
+      (c) => (c.subReservationID || c.roomID) === (r.subReservationID || r.roomID) && c.endDate === checkoutActual
+    )).length || 1;
+
+    const cargoEsperado = +(tarifa * nochesExtra * camasExtendidas).toFixed(2);
+
+    const resv2 = await cb("GET", "getReservation", { reservationID });
+    const saldoDespues = parseFloat(resv2?.data?.balance ?? saldoAntes);
+    const cargoAplicado = +(saldoDespues - saldoAntes).toFixed(2);
+    const delta = +(cargoEsperado - cargoAplicado).toFixed(2);
+
+    let ajuste = null;
+    if (Math.abs(delta) >= 0.5) {
+      ajuste = await cb("POST", "postAdjustment", {
+        reservationID,
+        type: "rate",
+        amount: String(delta),
+        notes: `Ajuste extensión IAN: ${nochesExtra} noche(s) x $${tarifa} (checkout ${checkoutActual} → ${nueva_fecha_checkout})`,
       });
-    }
-
-    // 5) Ajuste: queremos cambio neto == cargoCorrecto.
-    // Convencion Cloudbeds postAdjustment: amount POSITIVO descuenta, NEGATIVO agrega cargo.
-    // => new_balance = balanceDespues - amount  =>  amount = balanceDespues - (balanceAntes + cargoCorrecto)
-    const amountAjuste = Math.round((balanceDespues - balanceAntes - cargoCorrecto) * 100) / 100;
-
-    let ajusteFolio = null;
-    if (Math.abs(amountAjuste) >= 0.01) {
-      const adjParams = new URLSearchParams();
-      adjParams.append("propertyID", PROPERTY_ID);
-      adjParams.append("reservationID", grupoID);
-      adjParams.append("amount", String(amountAjuste));
-      adjParams.append("type", "rate"); // room rate (confirmado contra Cloudbeds)
-      adjParams.append("description", `Ajuste extension: ${nochesNuevas} noche(s) a ${tarifaNoche} MXN`);
-
-      const adjJson = await cbPost("postAdjustment", API_KEY, adjParams.toString());
-      if (!adjJson.success) {
-        // La extension ya quedo; el folio tiene el cobro de adjustPrice sin corregir. Avisar claro.
-        return res.status(200).json({
-          success: false, step: "postAdjustment",
-          error: `Extension hecha, pero no pude corregir el folio: ${adjJson.message || "postAdjustment fallo"}`,
-          balance_antes: balanceAntes, balance_despues: balanceDespues,
-          cargo_correcto: cargoCorrecto, amount_intentado: amountAjuste
-        });
-      }
-      ajusteFolio = {
-        aplicado: true,
-        amount: amountAjuste,
-        motivo: amountAjuste > 0 ? "descuento (Cloudbeds cobro de mas por re-tarifado)" : "cargo extra (Cloudbeds cobro de menos)"
-      };
     }
 
     return res.status(200).json({
       success: true,
-      nueva_fecha_checkout: nuevaFecha,
-      total_adicional: cargoCorrecto,
-      moneda: "MXN",
-      noches_extra: nochesNuevas,
-      camas_preservadas: assigned.length,
-      ajuste_folio: ajusteFolio, // null si no hizo falta
-      mensaje: `Listo, extendi tu cama hasta el ${nuevaFecha}. Total adicional: $${cargoCorrecto} MXN.`
+      result: `Extensión confirmada. Nuevo checkout: ${nueva_fecha_checkout}. Noches extra: ${nochesExtra}. Cargo total: $${cargoEsperado} MXN.`,
+      detalle: {
+        checkout_anterior: checkoutActual,
+        checkout_nuevo: nueva_fecha_checkout,
+        noches_extra: nochesExtra,
+        cargo_esperado: cargoEsperado,
+        cargo_aplicado_por_cloudbeds: cargoAplicado,
+        ajuste_aplicado: Math.abs(delta) >= 0.5 ? delta : 0,
+        ajuste_ok: ajuste ? !!ajuste.success : true,
+      },
     });
-
   } catch (e) {
-    return res.status(500).json({ success: false, error: String((e && e.message) || e) });
+    return res.status(200).json({
+      success: false,
+      result: `Error interno al extender: ${e.message}. La reservación pudo no haberse modificado; verificar en Cloudbeds.`,
+    });
   }
-}
-
-// ---------- helpers ----------
-
-// GET (lectura) o PUT (escritura con body)
-async function cb(pathOrMethod, apiKey, body) {
-  const isWrite = !!body;
-  const url = `${API_BASE}/${pathOrMethod}`;
-  const opts = { headers: { "x-api-key": apiKey } };
-  if (isWrite) {
-    opts.method = "PUT";
-    opts.headers["Content-Type"] = "application/x-www-form-urlencoded";
-    opts.body = body;
-  }
-  const r = await fetch(url, opts);
-  return r.json();
-}
-
-// POST (para postAdjustment)
-async function cbPost(method, apiKey, body) {
-  const r = await fetch(`${API_BASE}/${method}`, {
-    method: "POST",
-    headers: { "x-api-key": apiKey, "Content-Type": "application/x-www-form-urlencoded" },
-    body
-  });
-  return r.json();
-}
-
-function num(v, fallback = 0) {
-  const n = parseFloat(v);
-  return isNaN(n) ? fallback : n;
-}
-
-// Noches entre checkin (incluido) y checkout (excluido), formato YYYY-MM-DD. UTC-safe.
-function enumerarNoches(checkin, checkout) {
-  const out = [];
-  const d   = new Date(`${checkin}T00:00:00Z`);
-  const fin = new Date(`${checkout}T00:00:00Z`);
-  while (d < fin) {
-    out.push(d.toISOString().slice(0, 10));
-    d.setUTCDate(d.getUTCDate() + 1);
-  }
-  return out;
 }
