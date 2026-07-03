@@ -13,6 +13,9 @@ export default async function handler(req, res) {
     const reservationIDArg = String(p.reservationID || "").trim();
     const nuevaFecha       = String(p.nueva_fecha_checkout || "").trim();
     const dryRun           = String(p.dryRun || "") === "true";
+    // Estos ya venian en el payload de Make pero no se usaban:
+    const nochesExtra      = p.noches_extra != null ? Number(p.noches_extra) : null;
+    const tarifaNoche      = p.tarifa_noche != null ? Number(p.tarifa_noche) : null;
 
     if (!reservationIDArg || !nuevaFecha) {
       return res.status(400).json({ success: false, error: "Faltan reservationID o nueva_fecha_checkout" });
@@ -44,7 +47,11 @@ export default async function handler(req, res) {
       params.append(`rooms[${i}][checkoutDate]`, esObjetivo ? nuevaFecha : room.endDate);
       params.append(`rooms[${i}][adults]`, room.adults != null ? room.adults : 1);
       params.append(`rooms[${i}][children]`, room.children != null ? room.children : 0);
-      params.append(`rooms[${i}][adjustPrice]`, esObjetivo ? "true" : "false");
+      // CAMBIO CLAVE: ya no mandamos adjustPrice:true sin roomRates.
+      // Dejamos que Cloudbeds cobre la(s) noche(s) nueva(s) a su tarifa base actual.
+      // Si necesitas forzar un precio distinto (tarifa_noche), se ajusta despues
+      // con /postAdjustment (ver bloque mas abajo).
+      params.append(`rooms[${i}][adjustPrice]`, "false");
     });
 
     if (!objetivoOK) {
@@ -82,6 +89,26 @@ export default async function handler(req, res) {
         error: putJson.message || "putReservation fallo",
         camas: resumenCamas, body_preview: params.toString()
       });
+    }
+
+    // Si Cloudbeds no cobro la tarifa que quieres (porque uso su tarifa base
+    // en vez de tarifa_noche), forzamos el ajuste manualmente aqui.
+    // Comenta este bloque si prefieres dejar que Cloudbeds cobre su tarifa base tal cual.
+    if (tarifaNoche != null && nochesExtra != null && nochesExtra > 0) {
+      const montoEsperado = Math.round(tarifaNoche * nochesExtra * 100) / 100;
+      // postAdjustment agrega un cargo/ajuste a la reserva por el monto indicado.
+      // Ajusta el nombre de los parametros segun lo que confirme soporte de Cloudbeds
+      // (reservationID, subReservationID/roomID, amount, description, etc.)
+      // Dejamos esto listo pero comentado hasta confirmar el contrato exacto:
+      /*
+      const adjParams = new URLSearchParams();
+      adjParams.append("propertyID", PROPERTY_ID);
+      adjParams.append("reservationID", grupoID);
+      adjParams.append("subReservationID", reservationIDArg);
+      adjParams.append("amount", montoEsperado);
+      adjParams.append("description", `Extensión de estadía: ${nochesExtra} noche(s) x $${tarifaNoche}`);
+      await cb("postAdjustment", API_KEY, adjParams.toString());
+      */
     }
 
     const getJson2 = await cb(`getReservation?propertyID=${PROPERTY_ID}&reservationID=${grupoID}`, API_KEY);
