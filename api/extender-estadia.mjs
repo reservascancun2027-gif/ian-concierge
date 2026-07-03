@@ -32,6 +32,8 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: false, error: "La reserva no tiene habitaciones asignadas" });
     }
 
+    const targetRoom = assigned.find(r => String(r.subReservationID) === reservationIDArg);
+
     const params = new URLSearchParams();
     params.append("propertyID", PROPERTY_ID);
     params.append("reservationID", grupoID);
@@ -87,9 +89,31 @@ export default async function handler(req, res) {
     const balanceAntes = num(getJson.data.balance);
     const putJson = await cb("putReservation", API_KEY, params.toString());
     if (!putJson.success) {
+      const rawError = putJson.message || "putReservation fallo";
+      // Este es el error puntual que da Cloudbeds cuando no encuentra tarifa
+      // cargada (Base Rate) para alguna de las noches nuevas que se están
+      // agregando. adjustPrice:true no alcanza a resolverlo si Cloudbeds no
+      // tiene con qué calcular el precio de esa noche.
+      const esErrorDeTarifas = /day rate/i.test(rawError);
+
+      let fechasSinTarifa = null;
+      if (esErrorDeTarifas && targetRoom) {
+        fechasSinTarifa = await diagnosticarTarifasFaltantes({
+          apiKey: API_KEY,
+          propertyID: PROPERTY_ID,
+          roomTypeID: targetRoom.roomTypeID,
+          checkoutViejo: targetRoom.endDate,
+          checkoutNuevo: nuevaFecha
+        });
+      }
+
       return res.status(200).json({
         success: false, step: "putReservation",
-        error: putJson.message || "putReservation fallo",
+        error: rawError,
+        ...(esErrorDeTarifas ? {
+          posible_causa: "Cloudbeds no encontró tarifa cargada (Base Rate) para una o más de las noches nuevas. Revisa Rates > Base Rates / Availability Matrix para esas fechas y ese tipo de cuarto."
+        } : {}),
+        ...(fechasSinTarifa && fechasSinTarifa.length ? { fechas_sin_tarifa: fechasSinTarifa } : {}),
         camas: resumenCamas, body_preview: params.toString()
       });
     }
@@ -148,4 +172,59 @@ async function cb(pathOrMethod, apiKey, body) {
 function num(v, fallback = 0) {
   const n = parseFloat(v);
   return isNaN(n) ? fallback : n;
+}
+
+// Devuelve la lista de noches (una fecha por noche, formato yyyy-mm-dd) entre
+// startStr (inclusive) y endStr (exclusive). Ej: ("2026-07-04","2026-07-06")
+// -> ["2026-07-04","2026-07-05"]
+function datesBetween(startStr, endStr) {
+  const dates = [];
+  let d = new Date(`${startStr}T00:00:00Z`);
+  const end = new Date(`${endStr}T00:00:00Z`);
+  while (d < end) {
+    dates.push(d.toISOString().slice(0, 10));
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+// Diagnóstico best-effort: intenta detectar cuáles de las noches nuevas no
+// tienen tarifa/disponibilidad cargada en Cloudbeds (getRatePlans). Es
+// deliberadamente defensivo: si la forma de la respuesta no es la esperada,
+// o cualquier cosa falla, regresa null en vez de arriesgar un diagnóstico
+// incorrecto o tumbar la respuesta principal.
+async function diagnosticarTarifasFaltantes({ apiKey, propertyID, roomTypeID, checkoutViejo, checkoutNuevo }) {
+  try {
+    if (!checkoutViejo || !checkoutNuevo || checkoutNuevo <= checkoutViejo || !roomTypeID) return null;
+
+    const nochesNuevas = datesBetween(checkoutViejo, checkoutNuevo);
+    if (nochesNuevas.length === 0) return null;
+
+    const json = await cb(
+      `getRatePlans?propertyID=${propertyID}&roomTypeID=${roomTypeID}&startDate=${checkoutViejo}&endDate=${checkoutNuevo}&detailedRates=true`,
+      apiKey
+    );
+    if (!json.success || !Array.isArray(json.data)) return null;
+
+    // Junta todas las fechas que sí tienen tarifa+disponibilidad en
+    // cualquiera de los rate plans devueltos (base rate u otros).
+    const fechasConTarifa = new Set();
+    for (const plan of json.data) {
+      const detalle = plan.roomRate || plan.rateDaily || plan.detailedRates || [];
+      if (!Array.isArray(detalle)) continue;
+      for (const d of detalle) {
+        const fecha = d.date || d.rateDate;
+        const disponible = d.roomsAvailable == null || Number(d.roomsAvailable) > 0;
+        const tieneTarifa = d.rate != null && Number(d.rate) > 0;
+        if (fecha && disponible && tieneTarifa) fechasConTarifa.add(fecha);
+      }
+    }
+
+    // Si no logramos interpretar nada de la respuesta, no arriesgamos el diagnóstico.
+    if (fechasConTarifa.size === 0 && json.data.length === 0) return null;
+
+    return nochesNuevas.filter(f => !fechasConTarifa.has(f));
+  } catch (e) {
+    return null;
+  }
 }
