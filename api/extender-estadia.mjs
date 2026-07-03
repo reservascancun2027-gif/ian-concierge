@@ -94,11 +94,16 @@ export default async function handler(req, res) {
 
     const rooms = todas.map((c) => {
       const extiende = c.endDate === checkoutActual;
+      const salida = extiende ? nueva_fecha_checkout : c.endDate;
       const room = {
         roomTypeID: c.roomTypeID,
         quantity: 1,
+        // Cloudbeds v1.2 pide checkinDate/checkoutDate dentro de rooms[];
+        // se mandan también startDate/endDate por compatibilidad (los extras se ignoran).
+        checkinDate: c.startDate,
+        checkoutDate: salida,
         startDate: c.startDate,
-        endDate: extiende ? nueva_fecha_checkout : c.endDate,
+        endDate: salida,
       };
       if (c.roomID) room.roomID = c.roomID;
       if (c.subReservationID) room.subReservationID = c.subReservationID; // ID a nivel de cama (fix v3.5.2)
