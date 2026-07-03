@@ -47,11 +47,14 @@ export default async function handler(req, res) {
       params.append(`rooms[${i}][checkoutDate]`, esObjetivo ? nuevaFecha : room.endDate);
       params.append(`rooms[${i}][adults]`, room.adults != null ? room.adults : 1);
       params.append(`rooms[${i}][children]`, room.children != null ? room.children : 0);
-      // CAMBIO CLAVE: ya no mandamos adjustPrice:true sin roomRates.
-      // Dejamos que Cloudbeds cobre la(s) noche(s) nueva(s) a su tarifa base actual.
-      // Si necesitas forzar un precio distinto (tarifa_noche), se ajusta despues
-      // con /postAdjustment (ver bloque mas abajo).
-      params.append(`rooms[${i}][adjustPrice]`, "false");
+      // CAMBIO CLAVE: adjustPrice:true SOLO en la cama que se extiende.
+      // Esto le pide a Cloudbeds que calcule en vivo la tarifa de la(s) noche(s)
+      // nueva(s) usando su tarifa base actual (evita el error "Number of days
+      // not equals to number of day rates", que ocurre cuando cambias el rango
+      // de fechas pero Cloudbeds no tiene tarifa para la noche extra).
+      // Las camas que NO se tocan van con adjustPrice:false para no recalcular
+      // nada de lo que ya estaba correcto.
+      params.append(`rooms[${i}][adjustPrice]`, esObjetivo ? "true" : "false");
     });
 
     if (!objetivoOK) {
