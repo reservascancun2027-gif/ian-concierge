@@ -44,7 +44,7 @@ export default async function handler(req, res) {
     const grupoID = reservationIDArg.split("-")[0];
 
     // 1) Estado actual: saldo ANTES + estructura de camas
-    const getJson = await cb(`getReservation?propertyID=${PROPERTY_ID}&reservationID=${grupoID}`, API_KEY);
+    const getJson = await cb("getReservation?propertyID=" + PROPERTY_ID + "&reservationID=" + grupoID, API_KEY);
     if (!getJson.success) {
       return res.status(200).json({ success: false, step: "getReservation", error: getJson.message || "No se pudo leer la reserva" });
     }
@@ -68,7 +68,7 @@ export default async function handler(req, res) {
         success: false,
         step: "guard_status",
         status: statusRaw,
-        error: `No puedo extender: la reserva ${grupoID} ${BLOQUEADOS[statusNorm]}.`
+        error: "No puedo extender: la reserva " + grupoID + " " + BLOQUEADOS[statusNorm] + "."
       });
     }
 
@@ -84,7 +84,7 @@ export default async function handler(req, res) {
     if (nochesExtra <= 0) {
       return res.status(200).json({
         success: false,
-        error: `La nueva fecha (${nuevaFecha}) no extiende: el checkout actual ya es ${checkoutActual}`
+        error: "La nueva fecha (" + nuevaFecha + ") no extiende: el checkout actual ya es " + checkoutActual
       });
     }
 
@@ -97,18 +97,31 @@ export default async function handler(req, res) {
     params.append("reservationID", grupoID);
 
     let camasExtendidas = 0;
-    assigned.forEach((room, i) => {
+    assigned.forEach(function (room, i) {
       const extiende = room.endDate === checkoutActual;
       if (extiende) camasExtendidas++;
-      params.append(`rooms[${i}][subReservationID]`, room.subReservationID);
-      params.append(`rooms[${i}][roomTypeID]`, room.roomTypeID);
-      if (room.roomID) params.append(`rooms[${i}][roomID]`, room.roomID);
-      params.append(`rooms[${i}][checkinDate]`, room.startDate);
-      params.append(`rooms[${i}][checkoutDate]`, extiende ? nuevaFecha : room.endDate);
-      params.append(`rooms[${i}][adults]`, room.adults != null ? room.adults : 1);
-      params.append(`rooms[${i}][children]`, room.children != null ? room.children : 0);
-      params.append(`rooms[${i}][adjustPrice]`, extiende ? "true" : "false");
+      // Concatenacion simple (sin backticks): el indice [i] es OBLIGATORIO.
+      // Con "rooms[]" (indice vacio) cada campo crea un elemento nuevo y Cloudbeds
+      // truena con "Number of days not equals to number of day rates".
+      const pfx = "rooms[" + i + "]";
+      params.append(pfx + "[subReservationID]", room.subReservationID);
+      params.append(pfx + "[roomTypeID]", room.roomTypeID);
+      if (room.roomID) params.append(pfx + "[roomID]", room.roomID);
+      params.append(pfx + "[checkinDate]", room.startDate);
+      params.append(pfx + "[checkoutDate]", extiende ? nuevaFecha : room.endDate);
+      params.append(pfx + "[adults]", room.adults != null ? room.adults : 1);
+      params.append(pfx + "[children]", room.children != null ? room.children : 0);
+      params.append(pfx + "[adjustPrice]", extiende ? "true" : "false");
     });
+
+    // GUARD ANTI-PEGADO: si por cualquier razon el body no trae indices, abortar
+    // ANTES de tocar Cloudbeds.
+    if (params.toString().indexOf("rooms%5B0%5D") === -1) {
+      return res.status(500).json({
+        success: false,
+        error: "Bug interno: el body no trae indices en rooms[]. No se llamo a Cloudbeds."
+      });
+    }
 
     const cargoCorrecto = Math.round(tarifaNoche * nochesExtra * camasExtendidas * 100) / 100;
 
@@ -141,7 +154,7 @@ export default async function handler(req, res) {
     }
 
     // 5) Saldo DESPUES
-    const getJson2 = await cb(`getReservation?propertyID=${PROPERTY_ID}&reservationID=${grupoID}`, API_KEY);
+    const getJson2 = await cb("getReservation?propertyID=" + PROPERTY_ID + "&reservationID=" + grupoID, API_KEY);
     const balanceDespues = num(getJson2.data && getJson2.data.balance, NaN);
     if (isNaN(balanceDespues)) {
       return res.status(200).json({
@@ -163,14 +176,14 @@ export default async function handler(req, res) {
       adjParams.append("reservationID", grupoID);
       adjParams.append("amount", String(amountAjuste));
       adjParams.append("type", "rate"); // room rate (confirmado contra Cloudbeds)
-      adjParams.append("description", `Ajuste extension estadia: ${nochesExtra} noche(s) a ${tarifaNoche} MXN`);
+      adjParams.append("description", "Ajuste extension estadia: " + nochesExtra + " noche(s) a " + tarifaNoche + " MXN");
 
       const adjJson = await cbPost("postAdjustment", API_KEY, adjParams.toString());
       if (!adjJson.success) {
         // La extension ya quedo; el folio tiene el cobro sin corregir. Avisar claro.
         return res.status(200).json({
           success: false, step: "postAdjustment",
-          error: `Extension hecha, pero no pude corregir el folio: ${adjJson.message || "postAdjustment fallo"}`,
+          error: "Extension hecha, pero no pude corregir el folio: " + (adjJson.message || "postAdjustment fallo"),
           balance_antes: balanceAntes, balance_despues: balanceDespues,
           cargo_correcto: cargoCorrecto, amount_intentado: amountAjuste
         });
@@ -193,7 +206,7 @@ export default async function handler(req, res) {
       total_adicional: cargoCorrecto,
       moneda: "MXN",
       ajuste_folio: ajusteFolio, // null si no hizo falta
-      mensaje: `Listo, extendimos tu estadia al ${nuevaFecha}. Total adicional: $${cargoCorrecto} MXN ($${tarifaNoche} MXN por noche), a pagar en recepcion.`
+      mensaje: "Listo, extendimos tu estadia al " + nuevaFecha + ". Total adicional: $" + cargoCorrecto + " MXN ($" + tarifaNoche + " MXN por noche), a pagar en recepcion."
     });
 
   } catch (e) {
@@ -206,7 +219,7 @@ export default async function handler(req, res) {
 // GET (lectura) o PUT (escritura con body)
 async function cb(pathOrMethod, apiKey, body) {
   const isWrite = !!body;
-  const url = `${API_BASE}/${pathOrMethod}`;
+  const url = API_BASE + "/" + pathOrMethod;
   const opts = { headers: { "x-api-key": apiKey } };
   if (isWrite) {
     opts.method = "PUT";
@@ -219,7 +232,7 @@ async function cb(pathOrMethod, apiKey, body) {
 
 // POST (para postAdjustment)
 async function cbPost(method, apiKey, body) {
-  const r = await fetch(`${API_BASE}/${method}`, {
+  const r = await fetch(API_BASE + "/" + method, {
     method: "POST",
     headers: { "x-api-key": apiKey, "Content-Type": "application/x-www-form-urlencoded" },
     body
@@ -235,8 +248,8 @@ function num(v, fallback = 0) {
 // Noches entre checkin (incluido) y checkout (excluido), formato YYYY-MM-DD. UTC-safe.
 function enumerarNoches(checkin, checkout) {
   const out = [];
-  const d   = new Date(`${checkin}T00:00:00Z`);
-  const fin = new Date(`${checkout}T00:00:00Z`);
+  const d   = new Date(checkin + "T00:00:00Z");
+  const fin = new Date(checkout + "T00:00:00Z");
   while (d < fin) {
     out.push(d.toISOString().slice(0, 10));
     d.setUTCDate(d.getUTCDate() + 1);
